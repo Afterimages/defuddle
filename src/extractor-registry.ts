@@ -17,6 +17,7 @@ import { C2WikiExtractor } from './extractors/c2-wiki';
 import { SubstackExtractor } from './extractors/substack';
 import { NytimesExtractor } from './extractors/nytimes';
 import { WikipediaExtractor } from './extractors/wikipedia';
+import { BilibiliExtractor } from './extractors/bilibili';
 
 type ExtractorConstructor = new (document: Document, url: string, schemaOrgData?: any, options?: ExtractorOptions) => BaseExtractor;
 
@@ -148,6 +149,16 @@ export class ExtractorRegistry {
 				'wikipedia.org',
 			],
 			extractor: WikipediaExtractor
+		});
+
+		this.register({
+			patterns: [
+				'bilibili.com',
+				'www.bilibili.com',
+				'm.bilibili.com',
+				'b23.tv',
+			],
+			extractor: BilibiliExtractor
 		});
 
 		this.register({
