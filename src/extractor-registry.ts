@@ -153,9 +153,9 @@ export class ExtractorRegistry {
 
 		this.register({
 			patterns: [
-				'bilibili.com',
-				'www.bilibili.com',
-				'm.bilibili.com',
+				// Start safe: only handle b23.tv shortlinks.
+				// Bilibili pages often have rich DOM content when parsed from a browser snapshot;
+				// we don't want to override generic extraction on bilibili.com until we baseline it.
 				'b23.tv',
 			],
 			extractor: BilibiliExtractor
