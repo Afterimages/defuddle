@@ -121,6 +121,7 @@ export const EXACT_SELECTORS = [
 	'#barrier-page', // ft.com
 	'.alert',
 	'[rel="sponsored" i]',
+	'[href*="source=promotion" i]',
 
 	// comments
 	'[id="comments" i]',
@@ -138,6 +139,10 @@ export const EXACT_SELECTORS = [
 	// use <header> as the main content wrapper rather than a navigation container.
 	// A single <p> (subtitle/deck) is still a page header, not article content.
 	'header:not(:has(p + p)):not(:has(img))',
+	// Position-fixed/sticky headers are always site navigation (never content wrappers),
+	// so they don't need the :not(:has(img)) guard — their images are logos/icons.
+	'header[class~="fixed"]',
+	'header[class~="sticky"]',
 	'.header:not(.banner)',
 	'#header',
 	'#Header',
@@ -247,6 +252,9 @@ export const EXACT_SELECTORS = [
 	// iframes
 	'instaread-player',
 	'iframe:not([src])',
+	'iframe[src*="blink.net"]',
+	'iframe[src*="giscus.app"]',
+	'iframe[src*="tinypass.com"]',
 	'iframe[src*="trinitymedia.ai"]',
 
 	// logos
@@ -295,9 +303,15 @@ export const EXACT_SELECTORS = [
 	'[data-link-name*="skip" i]',
 	'[aria-label*="skip" i]',
 
+	// social
+	'[title^="Share on" i]',
+
 	// dismiss/close buttons
 	'[aria-label="Dismiss" i]',
 	'[aria-label="Close" i]',
+
+	// icon SVGs (Font Awesome)
+	'svg[data-icon]',
 
 	// other
 	'[data-testid="load-more-posts"] + div', // NY Times lazy loader
@@ -346,6 +360,7 @@ export const PARTIAL_SELECTORS = [
 	'adlayout',
 	'ad-tldr',
 	'ad-placement',
+	'adplacehold',
 	'ads-container',
 	'_ad_',
 	'AdBlock_',
@@ -406,8 +421,10 @@ export const PARTIAL_SELECTORS = [
 	'associated-people',
 	'ambient-video__button',
 	'audio-card',
+	'beyondwords',
 //	'author', Gwern
 //	'-author',
+	'about-author',
 	'author-bio',
 	'author-box',
 	'author-info',
@@ -452,6 +469,7 @@ export const PARTIAL_SELECTORS = [
 	'carouselcontainer',
 	'carousel-container',
 	'cat_header',
+	'cat-overlay',
 	'catlinks',
 	'_categories',
 	'card-author',
@@ -473,6 +491,8 @@ export const PARTIAL_SELECTORS = [
 	'complementary',
 	'consent',
 	'contact-',
+	'contactus',
+	'cookie.law',
 	'content-card', // The Verge
 	'copycontent',
 	'copy-tooltip',
@@ -541,6 +561,7 @@ export const PARTIAL_SELECTORS = [
 	'feedback',
 	'feed-links',
 	'field-site-sections',
+	'filed',
 	'fixheader',
 	'floating-vid',
 //	'follow',
@@ -682,10 +703,12 @@ export const PARTIAL_SELECTORS = [
 	'onward-journey', // FT.com
 	'open-slideshow',
 	'originally-published', // Mercury News
+	'osano-cm',
 	'other-blogs',
 	'outline-view',
 //	'overlay',
 
+	'pagefoot',
 	'pagehead',
 	'page-header',
 	'page-title',
@@ -791,8 +814,10 @@ export const PARTIAL_SELECTORS = [
 	'register',
 	'(?<!h[1-6]-)related',
 	'relevant',
+	'relposts',
 	'reversefootnote',
-	'robots-nocontent',
+	'rightcol',
+	'\\bnocontent\\b',
 	'_rss',
 	'rss-link',
 	'rubricwrapper',
@@ -857,6 +882,7 @@ export const PARTIAL_SELECTORS = [
 //	'-stats',
 	'_stats',
 //	'sticky',
+	'sticky-social',
 	'story-date',
 	'story-navigation',
 	'storyreadtime', // Medium
@@ -875,6 +901,7 @@ export const PARTIAL_SELECTORS = [
 	'tag_list',
 	'tag-list',
 	'tag-module',
+	'takeaways',
 	'taxonomy',
 //	'table-content',
 	'table-of-contents',
@@ -921,6 +948,7 @@ export const PARTIAL_SELECTORS = [
 	'visually-hidden',
 	'welcomebox',
 	'widget_pages',
+	'window__widget',
 //	'widget-'
 	// Webflow form state messages — shown after form submit, never article content
 	'w-form-done',
@@ -1059,6 +1087,7 @@ export const ALLOWED_ATTRIBUTES = new Set([
 	'src',
 	'srclang',
 	'srcset',
+	'start',
 	'title',
 	'type',
 	'width',

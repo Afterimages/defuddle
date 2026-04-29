@@ -10,7 +10,7 @@ import {
 	ENTRY_POINT_ELEMENTS
 } from './constants';
 import { standardizeContent } from './standardize';
-import { standardizeFootnotes } from './elements/footnotes';
+import { standardizeFootnotes, FOOTNOTE_SECTION_RE } from './elements/footnotes';
 import { standardizeCallouts } from './elements/callouts';
 import { ContentScorer, ContentScore } from './removals/scoring';
 import { findSmallImages, removeSmallImages } from './removals/small-images';
@@ -18,7 +18,7 @@ import { removeHiddenElements } from './removals/hidden';
 import { removeBySelector } from './removals/selectors';
 import { removeByContentPattern, removeEyebrowLabel } from './removals/content-patterns';
 import { removeMetadataBlock } from './removals/metadata-block';
-import { getComputedStyle, textPreview, countWords, isSVGElement } from './utils';
+import { getComputedStyle, textPreview, countWords } from './utils';
 import { parseHTML, serializeHTML, decodeHTMLEntities, isDangerousUrl, getClassName } from './utils/dom';
 
 interface StyleChange {
@@ -28,6 +28,9 @@ interface StyleChange {
 
 /** Keys from extractor variables that map to top-level DefuddleResponse fields */
 const STANDARD_VARIABLE_KEYS = new Set(['title', 'author', 'published', 'site', 'description', 'image', 'language']);
+
+// CSS-special characters that make class names invalid in selectors (Tailwind utilities like sm:pt-[131px])
+const UNSAFE_CSS_CLASS_RE = /[:\[\]()#>~+,]/;
 
 
 export class Defuddle {
@@ -219,12 +222,14 @@ export class Defuddle {
 		// isolates them, and they're widely used for legitimate media embeds.
 		// Dangerous iframe attributes (srcdoc, javascript: src) are stripped
 		// in the attribute pass below. Math scripts are preserved for LaTeX
-		// content (matching the EXACT_SELECTORS approach).
+		// content (matching the EXACT_SELECTORS approach). SVG <style> is
+		// removed too: CSS @import / url() inside it can fetch external
+		// resources from the reader's IP. applySvgFallbackStyles in
+		// standardize.ts reconstructs basic fill/stroke from class names.
 		const dangerousElements = body.querySelectorAll(
 			'script:not([type^="math/"]), style, noscript, frame, frameset, object, embed, applet, base'
 		);
 		for (const el of dangerousElements) {
-			if (el.tagName === 'STYLE' && isSVGElement(el)) continue;
 			el.remove();
 		}
 
@@ -310,6 +315,28 @@ export class Defuddle {
 				if (!img.parentElement) break; // img was the loser
 			}
 		}
+
+		// Remove lightbox duplicate images: a standalone <img> whose src matches
+		// the href of a sibling <a> that already contains its own <img>.
+		// Pattern: <a href="full.jpg"><img src="thumb.jpg"></a><img src="full.jpg">
+		for (const img of Array.from(body.querySelectorAll('img'))) {
+			if (!img.parentElement) continue;
+			if (img.closest('a, figure, noscript')) continue;
+
+			const src = img.getAttribute('src') || '';
+			if (!src || src.startsWith('data:')) continue;
+
+			const parent = img.parentElement;
+			const normalizedSrc = this._normalizeSrc(src);
+			for (const link of parent.querySelectorAll(':scope > a[href]')) {
+				if (!link.querySelector('img')) continue;
+				const href = link.getAttribute('href') || '';
+				if (normalizedSrc === this._normalizeSrc(href)) {
+					img.remove();
+					break;
+				}
+			}
+		}
 	}
 
 	private _keepBestImage(group: Element[]): void {
@@ -318,6 +345,41 @@ export class Defuddle {
 			const winner = this._pickBestImage(best, group[i]);
 			(winner === best ? group[i] : best).remove();
 			best = winner;
+		}
+	}
+
+	/** Strip protocol and query string for loose URL comparison. */
+	private _normalizeSrc(url: string): string {
+		return url.replace(/^https?:\/\//, '').split('?')[0];
+	}
+
+	/**
+	 * Remove the cover/hero image from content when it matches the page's
+	 * metadata image (og:image). The image is already captured as result.image;
+	 * keeping it inline duplicates information.
+	 * Only removes when the image is not inside a figure with a caption
+	 * (captioned figures are intentional content references).
+	 * Returns the highest-resolution URL from the image's srcset (if available)
+	 * so callers can upgrade the metadata image.
+	 */
+	private _removeCoverImage(body: Element, metadataImage: string): string | undefined {
+		if (!metadataImage) return;
+
+		const metaNorm = this._normalizeSrc(metadataImage);
+
+		for (const img of body.querySelectorAll('img')) {
+			const src = img.getAttribute('src') || '';
+			if (!src || src.startsWith('data:')) continue;
+			if (this._normalizeSrc(src) !== metaNorm) continue;
+
+			const bestUrl = this._getLargestImageSrc(img);
+
+			// Don't remove if inside a figure with a caption (intentional content use)
+			const figure = img.closest('figure');
+			if (figure && figure.querySelector('figcaption')) return bestUrl;
+
+			img.remove();
+			return bestUrl;
 		}
 	}
 
@@ -822,6 +884,13 @@ export class Defuddle {
 				mainContent!.querySelectorAll('wbr').forEach(el => el.remove());
 			});
 
+			// Pull in footnote sections that live outside the main content element
+			profileStep('adoptExternalFootnotes', () => {
+				if (options.standardize) {
+					this.adoptExternalFootnotes(mainContent!, clone);
+				}
+			});
+
 			// Standardize footnotes before cleanup (CSS sidenotes use display:none)
 			profileStep('standardizeFootnotesCallouts', () => {
 				if (options.standardize) {
@@ -882,7 +951,7 @@ export class Defuddle {
 			profileStep('removeByContentPattern', () => {
 				if (options.removeContentPatterns && mainContent) {
 					const url = this.options.url || this.doc.URL || '';
-					removeByContentPattern(mainContent!, this.debug, url, metadata.title || '', debugRemovals);
+					removeByContentPattern(mainContent!, this.debug, url, metadata.title || '', metadata.description || '', debugRemovals);
 				}
 			});
 
@@ -899,6 +968,13 @@ export class Defuddle {
 			// Remove duplicate images (same alt, different resolution)
 			// after all image processing and URL resolution is complete
 			this._deduplicateImages(mainContent!);
+
+			// Remove cover/hero image that duplicates the metadata image.
+			// If the content image has a higher-resolution srcset URL, upgrade metadata.
+			const bestCoverUrl = this._removeCoverImage(mainContent!, metadata.image || '');
+			if (bestCoverUrl) {
+				metadata.image = bestCoverUrl;
+			}
 
 			const content = mainContent.outerHTML;
 			const endTime = Date.now();
@@ -1194,23 +1270,46 @@ export class Defuddle {
 	private getElementSelector(element: Element): string {
 		const parts: string[] = [];
 		let current: Element | null = element;
-		
+
 		while (current && current !== this.doc.documentElement) {
 			let selector = current.tagName.toLowerCase();
 			if (current.id) {
 				selector += '#' + current.id;
 			} else if (getClassName(current)) {
-				selector += '.' + getClassName(current).trim().split(/\s+/).join('.');
+				const safe = getClassName(current).trim().split(/\s+/)
+					.filter(cls => !UNSAFE_CSS_CLASS_RE.test(cls));
+				if (safe.length) {
+					selector += '.' + safe.join('.');
+				}
 			}
 			parts.unshift(selector);
 			current = current.parentElement;
 		}
-		
+
 		return parts.join(' > ');
 	}
 
 	private getComputedStyle(element: Element): CSSStyleDeclaration | null {
 		return getComputedStyle(element);
+	}
+
+	// Move footnote sections that live outside the main content element into it.
+	private adoptExternalFootnotes(mainContent: Element, root: Document | Element): void {
+		const body = (root as any).body || root;
+		if (!body || mainContent === body) return;
+
+		body.querySelectorAll('div, section, aside').forEach((el: Element) => {
+			const className = getClassName(el);
+			const id = (el as any).id || '';
+			if (!/footnote/i.test(className) && !/footnote/i.test(id)) return;
+
+			if (mainContent.contains(el) || el.contains(mainContent)) return;
+
+			const heading = el.querySelector('h1, h2, h3, h4, h5, h6');
+			if (!heading || !FOOTNOTE_SECTION_RE.test(heading.textContent?.trim() || '')) return;
+
+			mainContent.appendChild(el);
+		});
 	}
 
 	/**

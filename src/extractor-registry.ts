@@ -23,6 +23,9 @@ import { ThreadsExtractor } from './extractors/threads';
 import { BlueskyExtractor } from './extractors/bluesky';
 import { DiscourseExtractor } from './extractors/discourse';
 import { MediumExtractor } from './extractors/medium';
+import { LeetCodeExtractor } from './extractors/leetcode';
+import { LwnExtractor } from './extractors/lwn';
+import { MastodonExtractor } from './extractors/mastodon';
 
 type ExtractorConstructor = new (document: Document, url: string, schemaOrgData?: any, options?: ExtractorOptions) => BaseExtractor;
 
@@ -196,8 +199,27 @@ export class ExtractorRegistry {
 		});
 
 		this.register({
+			patterns: [/\/@[^/]+\/\d+/],
+			extractor: MastodonExtractor
+		});
+
+		this.register({
 			patterns: [/\/t\/[^/]+\/\d+/],
 			extractor: DiscourseExtractor
+		});
+
+		this.register({
+			patterns: [
+				'leetcode.com',
+			],
+			extractor: LeetCodeExtractor
+		});
+
+		this.register({
+			patterns: [
+				'lwn.net',
+			],
+			extractor: LwnExtractor
 		});
 
 		this.register({

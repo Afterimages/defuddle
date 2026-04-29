@@ -8,7 +8,7 @@ import {
 	FOOTNOTE_LIST_SELECTORS
 } from '../constants';
 import { DebugRemoval } from '../types';
-import { textPreview, logDebug, isSVGElement } from '../utils';
+import { textPreview, logDebug } from '../utils';
 import { getClassName, hasResponsiveShowClass } from '../utils/dom';
 
 export function removeBySelector(doc: Document, debug: boolean, removeExact: boolean = true, removePartial: boolean = true, mainContent?: Element | null, debugRemovals?: DebugRemoval[], skipHiddenExactSelectors: boolean = false) {
@@ -36,9 +36,6 @@ export function removeBySelector(doc: Document, debug: boolean, removeExact: boo
 				}
 				// Skip elements inside code blocks (e.g. syntax highlighting spans)
 				if (el.closest('pre, code')) {
-					return;
-				}
-				if (el.tagName === 'STYLE' && isSVGElement(el)) {
 					return;
 				}
 				// Skip elements with responsive show classes (e.g. "hidden sm:flex")
@@ -84,19 +81,19 @@ export function removeBySelector(doc: Document, debug: boolean, removeExact: boo
 
 			// Get all relevant attributes and combine into a single string
 			// (Hardcoded to match TEST_ATTRIBUTES in constants.ts — avoids array allocation per element)
-			// For heading elements, exclude the id attribute — heading IDs are
-			// auto-generated slugs from content text (e.g. "3-ignore-the-error")
-			// that would falsely match partial selectors like "-error".
+			// For headings, only check class — IDs are auto-slugs and data-testid
+			// values (e.g. "article-header") cause false positives.
 			const isHeading = /^H[1-6]$/.test(tag);
-			const attrs = (
-				getClassName(el) + ' ' +
-				(isHeading ? '' : (el.id || '')) + ' ' +
-				(el.getAttribute('data-component') || '') + ' ' +
-				(el.getAttribute('data-test') || '') + ' ' +
-				(el.getAttribute('data-testid') || '') + ' ' +
-				(el.getAttribute('data-test-id') || '') + ' ' +
-				(el.getAttribute('data-qa') || '') + ' ' +
-				(el.getAttribute('data-cy') || '')
+			const attrs = (isHeading
+				? getClassName(el)
+				: getClassName(el) + ' ' +
+					(el.id || '') + ' ' +
+					(el.getAttribute('data-component') || '') + ' ' +
+					(el.getAttribute('data-test') || '') + ' ' +
+					(el.getAttribute('data-testid') || '') + ' ' +
+					(el.getAttribute('data-test-id') || '') + ' ' +
+					(el.getAttribute('data-qa') || '') + ' ' +
+					(el.getAttribute('data-cy') || '')
 			).toLowerCase();
 
 			// Skip if no attributes to check
@@ -140,6 +137,24 @@ export function removeBySelector(doc: Document, debug: boolean, removeExact: boo
 				return;
 			}
 		} catch (e) {}
+		// Buttons that contain media (e.g. Bloomberg image zoom overlays) —
+		// extract only the media, discard the button and its non-media children
+		// (SVG icons, overlay text) to avoid leaking UI chrome.
+		if (el.tagName === 'BUTTON' && el.querySelector('img, picture, video')) {
+			const parent = el.parentElement;
+			if (parent) {
+				for (const media of Array.from(el.querySelectorAll('img, picture, video'))) {
+					parent.insertBefore(media, el);
+				}
+				el.remove();
+			}
+			return;
+		}
+		// Unwrap buttons in inline context to preserve text (e.g. LeetCode tooltip terms)
+		if (el.tagName === 'BUTTON' && el.closest('p, li, td, th, span, h1, h2, h3, h4, h5, h6')) {
+			el.replaceWith(...Array.from(el.childNodes));
+			return;
+		}
 		if (debug && debugRemovals) {
 			debugRemovals.push({
 				step: 'removeBySelector',
