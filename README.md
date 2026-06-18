@@ -2,6 +2,8 @@
 
 > 更适合中国网友体质的 defuddle
 
+2026.06.18 更新公告： B站字幕提取器已被上游合并。
+
 基于 [defuddle](https://github.com/kepano/defuddle) 上游的分支版本，在保留原有全部功能的基础上，新增了对小红书 和 B 站（Bilibili）的专属内容提取支持，未来还会持续添加更多国内平台的适配。
 
 - 问题背景：上游的defuddle仓库目前对小红书和B站的内容提取支持不太良好（缺乏专项支持）。具体而言：
@@ -194,7 +196,7 @@ npm run build:chrome
 | 项目 | 上游 defuddle | 本分支 |
 |------|--------------|--------|
 | 小红书提取器 | ❌(https://github.com/kepano/defuddle/pull/292) | ✅ `XiaohongshuExtractor` |
-| B 站提取器 | ❌(https://github.com/kepano/defuddle/pull/271) | ✅ `BilibiliExtractor` |
+| B 站提取器 | ✅ (https://github.com/kepano/defuddle/pull/271) | ✅ `BilibiliExtractor` |
 | 逐字稿构建工具 | ✅（YouTube） | ✅ 共用 `src/utils/transcript.ts` |
 | 其他平台提取器 | ✅ | ✅ 完全保留 |
 
